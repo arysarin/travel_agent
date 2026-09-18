@@ -1,0 +1,304 @@
+{
+  "eval_set_id": "travel_adviser_smoke",
+  "name": "Travel Adviser smoke eval set",
+  "description": "8 varied trip requests covering surprise-me destination, one-way flights, tight/impossible budgets, and far-future weather. See each case's `note` in generate_evalset.py for what to eyeball manually.",
+  "eval_cases": [
+    {
+      "eval_id": "destination_given_full_trip",
+      "conversation": [
+        {
+          "invocation_id": "destination_given_full_trip-1",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Plan a 5-day trip to Kyoto, Japan under $2500, departing JFK on 2026-11-10 and returning 2026-11-15."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "args": {},
+                "name": "search_flights"
+              },
+              {
+                "args": {},
+                "name": "search_hotels"
+              },
+              {
+                "args": {},
+                "name": "get_weather"
+              }
+            ],
+            "tool_responses": [],
+            "intermediate_responses": []
+          },
+          "creation_timestamp": 0.0
+        }
+      ],
+      "creation_timestamp": 0.0,
+      "final_session_state": {}
+    },
+    {
+      "eval_id": "surprise_me_destination",
+      "conversation": [
+        {
+          "invocation_id": "surprise_me_destination-1",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Surprise me with a warm beach destination for 4 days under $1500, departing from Chicago on 2026-12-05."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "args": {},
+                "name": "search_flights"
+              },
+              {
+                "args": {},
+                "name": "search_hotels"
+              },
+              {
+                "args": {},
+                "name": "get_weather"
+              }
+            ],
+            "tool_responses": [],
+            "intermediate_responses": []
+          },
+          "creation_timestamp": 0.0
+        }
+      ],
+      "creation_timestamp": 0.0,
+      "final_session_state": {}
+    },
+    {
+      "eval_id": "tight_budget_forces_revision",
+      "conversation": [
+        {
+          "invocation_id": "tight_budget_forces_revision-1",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Plan a 3-day trip to Paris under $500 total, departing from Boston on 2026-10-20 and returning 2026-10-23."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "args": {},
+                "name": "search_flights"
+              },
+              {
+                "args": {},
+                "name": "search_hotels"
+              },
+              {
+                "args": {},
+                "name": "get_weather"
+              }
+            ],
+            "tool_responses": [],
+            "intermediate_responses": []
+          },
+          "creation_timestamp": 0.0
+        }
+      ],
+      "creation_timestamp": 0.0,
+      "final_session_state": {}
+    },
+    {
+      "eval_id": "one_way_trip",
+      "conversation": [
+        {
+          "invocation_id": "one_way_trip-1",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Plan a one-way move to Berlin for a new job, departing from Austin on 2027-01-15. Budget is $3000 for the flight and first two weeks of temporary housing."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "args": {},
+                "name": "search_flights"
+              },
+              {
+                "args": {},
+                "name": "search_hotels"
+              },
+              {
+                "args": {},
+                "name": "get_weather"
+              }
+            ],
+            "tool_responses": [],
+            "intermediate_responses": []
+          },
+          "creation_timestamp": 0.0
+        }
+      ],
+      "creation_timestamp": 0.0,
+      "final_session_state": {}
+    },
+    {
+      "eval_id": "far_future_weather_unavailable",
+      "conversation": [
+        {
+          "invocation_id": "far_future_weather_unavailable-1",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Plan a 4-day trip to Rome under $2000, departing from Miami on 2027-03-01 and returning 2027-03-05."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "args": {},
+                "name": "search_flights"
+              },
+              {
+                "args": {},
+                "name": "search_hotels"
+              },
+              {
+                "args": {},
+                "name": "get_weather"
+              }
+            ],
+            "tool_responses": [],
+            "intermediate_responses": []
+          },
+          "creation_timestamp": 0.0
+        }
+      ],
+      "creation_timestamp": 0.0,
+      "final_session_state": {}
+    },
+    {
+      "eval_id": "domestic_short_trip",
+      "conversation": [
+        {
+          "invocation_id": "domestic_short_trip-1",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Plan a quick weekend trip from New York to Miami, 2 days, under $800, departing 2026-10-24 and returning 2026-10-26."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "args": {},
+                "name": "search_flights"
+              },
+              {
+                "args": {},
+                "name": "search_hotels"
+              },
+              {
+                "args": {},
+                "name": "get_weather"
+              }
+            ],
+            "tool_responses": [],
+            "intermediate_responses": []
+          },
+          "creation_timestamp": 0.0
+        }
+      ],
+      "creation_timestamp": 0.0,
+      "final_session_state": {}
+    },
+    {
+      "eval_id": "multi_interest_destination_given",
+      "conversation": [
+        {
+          "invocation_id": "multi_interest_destination_given-1",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Destination will be Darjeeling. Dates will be October 10th 2026 for 3 days. My budget is 10000. My interests are adventure, culture, food, outdoor activities."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "args": {},
+                "name": "search_flights"
+              },
+              {
+                "args": {},
+                "name": "search_hotels"
+              },
+              {
+                "args": {},
+                "name": "get_weather"
+              }
+            ],
+            "tool_responses": [],
+            "intermediate_responses": []
+          },
+          "creation_timestamp": 0.0
+        }
+      ],
+      "creation_timestamp": 0.0,
+      "final_session_state": {}
+    },
+    {
+      "eval_id": "impossible_budget",
+      "conversation": [
+        {
+          "invocation_id": "impossible_budget-1",
+          "user_content": {
+            "parts": [
+              {
+                "text": "Plan a 5-day trip to Tokyo, Japan under $200 total, departing Seattle on 2026-11-20 and returning 2026-11-25."
+              }
+            ],
+            "role": "user"
+          },
+          "intermediate_data": {
+            "tool_uses": [
+              {
+                "args": {},
+                "name": "search_flights"
+              },
+              {
+                "args": {},
+                "name": "search_hotels"
+              },
+              {
+                "args": {},
+                "name": "get_weather"
+              }
+            ],
+            "tool_responses": [],
+            "intermediate_responses": []
+          },
+          "creation_timestamp": 0.0
+        }
+      ],
+      "creation_timestamp": 0.0,
+      "final_session_state": {}
+    }
+  ],
+  "creation_timestamp": 0.0
+}

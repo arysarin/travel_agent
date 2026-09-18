@@ -1,0 +1,7 @@
+google-adk[eval]
+litellm
+openai
+requests
+python-dotenv
+streamlit
+pytest

@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "travel-adviser"
+version = "0.1.0"
+description = "Multi-agent trip planner built on Google ADK"
+requires-python = ">=3.10"
+dependencies = [
+    "google-adk",
+    "litellm",
+    "openai",
+    "requests",
+    "python-dotenv",
+    "streamlit",
+]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+eval = ["google-adk[eval]"]
+
+[tool.setuptools]
+packages = ["travel_adviser", "travel_adviser.tools", "travel_adviser.sub_agents"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
