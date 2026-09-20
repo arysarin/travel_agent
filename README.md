@@ -88,17 +88,16 @@ full response from the next rung — a known limitation of
 `travel_adviser/fallback_llm.py`, not worth the complexity to fix for this
 project's scope.
 
-**Cross-agent mixed-provider history.** Each of the 6 agents builds its
-own independent fallback chain (`get_model()` is called separately per
-agent) and always starts back at rung 1. So if `itinerary_agent` falls
-through to Groq mid-pipeline, and then `transportation_agent` starts its
-own turn back at Gemini, Gemini receives conversation history containing
-Groq-authored function calls — which don't carry Gemini's proprietary
-`thought_signature`, and Gemini's API rejects replaying those outright
-("Function call is missing a thought_signature"). In practice this mostly
-surfaces when Gemini's quota is exhausted *inconsistently* mid-run rather
-than cleanly for the whole request; it's a known architectural limitation,
-not something worth solving for this project's scope.
+**Mixed-provider history.** The chain restarts at rung 1 on *every* LLM
+call, not once per run. So if one call falls through to Groq (even from a
+transient Gemini 503) and makes a tool call, the next call starts back at
+Gemini with a history containing a Groq-authored function call — which
+lacks the `thought_signature` Gemini requires, so Gemini rejects it with a
+400. `fallback_llm.py` treats that specific 400 as "this rung can't handle
+this history" and cascades to the next rung, so the run keeps going on the
+provider that made the call. The cost is one wasted fast-failing request
+per such turn; the alternative (remembering the last successful rung
+across calls) would be more complex for little gain here.
 
 ### Amadeus flight-search backup
 

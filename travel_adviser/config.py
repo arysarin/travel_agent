@@ -20,7 +20,7 @@ MODEL_NAME = os.environ.get("TRAVEL_ADVISER_MODEL", "gemini-3.6-flash")
 # A second Gemini model under the SAME Google API key. Free-tier quota is
 # tracked per model name, so this is a separate 20/day bucket at no extra
 # signup cost — the cheapest possible resilience add. Blank to disable.
-GEMINI_FALLBACK_MODEL = os.environ.get("GEMINI_FALLBACK_MODEL", "gemini-2.5-flash")
+GEMINI_FALLBACK_MODEL = os.environ.get("GEMINI_FALLBACK_MODEL", "gemini-3.5-flash")
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
@@ -29,7 +29,7 @@ GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 # but the free lineup rotates over time; if OPENROUTER_MODEL ever 404s,
 # check https://openrouter.ai/models?max_price=0 for the current list.
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
-OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "deepseek/deepseek-v4-flash-0731:free")
+OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "qwen/qwen3.8-27b:free")
 
 # Amadeus is a self-serve backup to SerpAPI for flight search specifically
 # (SerpAPI's free tier is only 100 searches/month). Both keys are required

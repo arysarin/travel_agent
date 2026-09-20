@@ -21,6 +21,8 @@ from google.genai.errors import APIError as GenAIAPIError
 from openai import APIError as OpenAIAPIError
 from openai import APIStatusError as OpenAIAPIStatusError
 
+from .logging_utils import _write_event
+
 # HTTP status worth falling back on: 429 = quota exhausted/rate limited,
 # 503 = model temporarily overloaded, 404 = model retired/not available to
 # this account. That last one looks like it should be a loud config bug,
@@ -38,6 +40,15 @@ _FALLBACK_STATUSES = {404, 429, 503}
 def _is_transient(exc: Exception) -> bool:
     """Whether `exc` is worth failing over on rather than raising."""
     if isinstance(exc, GenAIAPIError):
+        # Every LLM call restarts the chain at the first rung. If an earlier
+        # call in the same conversation fell through to Groq/OpenRouter and
+        # made a tool call, Gemini receives that function call without the
+        # thought_signature it requires and rejects the whole request with
+        # a 400. That's a rung that can't handle this history, not a bug in
+        # the request — cascading keeps the tool-calling turn on the rung
+        # that produced the call.
+        if exc.code == 400 and "thought_signature" in str(exc):
+            return True
         return exc.code in _FALLBACK_STATUSES
     if isinstance(exc, OpenAIAPIStatusError):
         # Covers LiteLLM's mapped RateLimitError/InternalServerError/etc.
@@ -76,6 +87,17 @@ class FallbackLlm(BaseLlm):
         except (GenAIAPIError, OpenAIAPIError) as exc:
             if not _is_transient(exc):
                 raise
+            # If the whole chain ends up exhausted, only the last rung's
+            # error reaches the caller — log each hop so the earlier rungs'
+            # failures are still diagnosable afterwards.
+            _write_event(
+                {
+                    "event": "model_fallback",
+                    "from": self.primary.model,
+                    "to": self.fallback.model,
+                    "error": str(exc)[:300],
+                }
+            )
 
         # LiteLlm resolves its model as `llm_request.model or self.model`,
         # and llm_request.model is still the primary's name (set upstream by
