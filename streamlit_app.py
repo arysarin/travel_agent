@@ -8,6 +8,7 @@ the run completes.
 """
 
 import asyncio
+import logging
 import time
 import uuid
 from datetime import date, timedelta
@@ -150,7 +151,12 @@ def execute(request_text: str) -> None:
         st.session_state.elapsed = time.time() - started
         status.update(label="Trip plan ready", state="complete", expanded=False)
     except Exception as exc:  # noqa: BLE001 - surface any provider/config error to the UI
-        st.session_state.error = str(exc)
+        # str(exc) can be empty for some exception types (e.g. a bare
+        # asyncio.CancelledError/TimeoutError), and an empty string reads
+        # as falsy — without the fallback, the UI would show the failed
+        # status but silently drop the error message entirely.
+        st.session_state.error = str(exc) or f"{type(exc).__module__}.{type(exc).__name__}"
+        logging.getLogger(__name__).exception("Trip planning run failed")
         status.update(label="The run failed", state="error", expanded=False)
     finally:
         progress.empty()

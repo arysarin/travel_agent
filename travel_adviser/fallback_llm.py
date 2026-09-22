@@ -1,14 +1,14 @@
 """A BaseLlm that retries on a second model/provider when the primary fails.
 
 Built after repeatedly hitting the Gemini free tier's 20 requests/day quota
-during development (429 RESOURCE_EXHAUSTED), plus occasional 503 "model
-overloaded" responses. Both are transient/account-level failures, not
-correctness bugs, so falling back rather than failing the whole run is the
-right response. Instances nest (model_provider.py chains several of these
-together — a second Gemini model, then Groq, then OpenRouter), so this
-also has to recognize failures from a LiteLLM-backed rung (Groq/OpenRouter),
-not just Gemini's own native client, or the chain would stop cascading
-after the first LiteLLM rung.
+during development (429 RESOURCE_EXHAUSTED), plus occasional 503/504
+"overloaded"/"deadline exceeded" responses and outright request timeouts.
+None of these are correctness bugs, so falling back rather than failing
+the whole run is the right response. Instances nest (model_provider.py
+chains several of these together — a second Gemini model, then Groq, then
+OpenRouter), so this also has to recognize failures from a LiteLLM-backed
+rung (Groq/OpenRouter), not just Gemini's own native client, or the chain
+would stop cascading after the first LiteLLM rung.
 """
 
 from typing import AsyncGenerator
@@ -24,17 +24,22 @@ from openai import APIStatusError as OpenAIAPIStatusError
 from .logging_utils import _write_event
 
 # HTTP status worth falling back on: 429 = quota exhausted/rate limited,
-# 503 = model temporarily overloaded, 404 = model retired/not available to
-# this account. That last one looks like it should be a loud config bug,
-# but in practice every provider used here has hit it during development
-# (Gemini retired gemini-2.0-flash, then gemini-2.5-flash turned out to be
-# "no longer available to new users" despite still being listed by the
-# models endpoint; Groq retired llama-3.3-70b-versatile) — for a chain
-# whose whole purpose is resilience, "this rung is unreachable" should
-# always mean "try the next one," not "break the entire chain." Genuine
-# misconfiguration (bad API key, malformed request) still surfaces
-# normally since those aren't in this set.
-_FALLBACK_STATUSES = {404, 429, 503}
+# 503 = model temporarily overloaded, 504 = the provider's own backend
+# timed out server-side, 499 = Google's own code for "our 30s
+# http_options timeout fired and cancelled the request" (a bare
+# TimeoutError with no status code covers the same trigger elsewhere —
+# see the except clause below; apparently which shape it takes isn't
+# consistent), 404 = model retired or not available to this account.
+# That last one looks like it should be a loud config bug, but in
+# practice every provider used here has hit it during development
+# (Gemini retired gemini-2.0-flash, then gemini-2.5-flash turned out to
+# be "no longer available to new users" despite still being listed by
+# the models endpoint; Groq retired llama-3.3-70b-versatile) — for a
+# chain whose whole purpose is resilience, "this rung is unreachable"
+# should always mean "try the next one," not "break the entire chain."
+# Genuine misconfiguration (bad API key, malformed request) still
+# surfaces normally since those aren't in this set.
+_FALLBACK_STATUSES = {404, 429, 499, 503, 504}
 
 
 def _is_transient(exc: Exception) -> bool:
@@ -84,18 +89,26 @@ class FallbackLlm(BaseLlm):
             async for response in self.primary.generate_content_async(llm_request, stream):
                 yield response
             return
-        except (GenAIAPIError, OpenAIAPIError) as exc:
-            if not _is_transient(exc):
+        except (GenAIAPIError, OpenAIAPIError, TimeoutError) as exc:
+            # TimeoutError (e.g. asyncio.TimeoutError from aiohttp when our
+            # own http_options timeout trips) isn't a GenAIAPIError/
+            # OpenAIAPIError at all — it's a bare stdlib exception with no
+            # status code — but a request that never got a response is
+            # exactly the kind of thing worth cascading on, so it skips
+            # the status-code check that the API-shaped errors go through.
+            if isinstance(exc, (GenAIAPIError, OpenAIAPIError)) and not _is_transient(exc):
                 raise
             # If the whole chain ends up exhausted, only the last rung's
             # error reaches the caller — log each hop so the earlier rungs'
-            # failures are still diagnosable afterwards.
+            # failures are still diagnosable afterwards. str(exc) can be
+            # empty for TimeoutError specifically, hence the fallback.
+            error_text = str(exc) or f"{type(exc).__module__}.{type(exc).__name__}"
             _write_event(
                 {
                     "event": "model_fallback",
                     "from": self.primary.model,
                     "to": self.fallback.model,
-                    "error": str(exc)[:300],
+                    "error": error_text[:300],
                 }
             )
 

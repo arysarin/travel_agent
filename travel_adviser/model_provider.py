@@ -30,14 +30,22 @@ from .fallback_llm import FallbackLlm
 # http_options timeout matters separately: attempts=1 only stops *retries*
 # after a response comes back — a request that never gets a response at
 # all (a hung connection) has nothing bounding it without this.
+#
+# 60s, not 30s: a first pass at 30s turned out to cut off some Gemini
+# calls that were just slow (large accumulated context late in the
+# pipeline, e.g. final_merge_agent), not actually stuck — those got
+# cancelled (a bare TimeoutError, or Gemini's own 499 CANCELLED) and
+# bounced to the next rung for no reason. 60s still bounds the worst
+# case (the un-timed-out hang that motivated this was 20+ minutes) while
+# giving a legitimately slow-but-working call room to finish.
 _FAST_FAIL_RETRY = types.HttpRetryOptions(attempts=1)
-_FAST_FAIL_HTTP = types.HttpOptions(timeout=30_000)  # milliseconds
+_FAST_FAIL_HTTP = types.HttpOptions(timeout=60_000)  # milliseconds
 
 # Same idea for LiteLLM-backed rungs (Groq/OpenRouter): its default
 # per-request timeout is 6000 seconds, and it has its own retry behavior
 # independent of ours — both work against a fast-failing chain, so pin
 # them down explicitly rather than inherit whatever LiteLLM defaults to.
-_FAST_FAIL_LITELLM_KWARGS = {"timeout": 30, "num_retries": 0}
+_FAST_FAIL_LITELLM_KWARGS = {"timeout": 60, "num_retries": 0}
 
 
 def _build_chain(rungs: list[BaseLlm]):

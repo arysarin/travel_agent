@@ -58,7 +58,8 @@ request — Gemini's `gemini-3.6-flash` caps out at 20 requests/day, easy to
 exceed in 2-3 trip-planning runs. Every agent (see
 `travel_adviser/model_provider.py`) tries, in order, however many of these
 are configured, moving to the next one whenever the current one returns a
-429 (quota exhausted) or 503 (overloaded):
+429 (quota exhausted), 503 (overloaded), or 504 (the provider's own
+backend timed out):
 
 1. `TRAVEL_ADVISER_MODEL` (primary Gemini model, always tried first)
 2. `GEMINI_FALLBACK_MODEL` — a *second* Gemini model under the same key.
