@@ -1,0 +1,15 @@
+.venv/
+.git/
+.github/
+__pycache__/
+*.pyc
+.pytest_cache/
+.adk/
+logs/
+*.log
+.env
+.env.example
+.vscode/
+tests/
+requirements.txt
+README.md

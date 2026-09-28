@@ -1,0 +1,9 @@
+# Runtime dependencies only — no eval extra (pandas/tabulate/etc., dev-only)
+# and no pytest. Keeps the deployed container image lean. `requirements.txt`
+# (with google-adk[eval] and pytest) is still what local dev installs from.
+google-adk
+litellm
+openai
+requests
+python-dotenv
+streamlit
