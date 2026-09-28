@@ -57,6 +57,26 @@ EXAMPLE_REQUEST = (
     "2026-11-10 and returning 2026-11-15."
 )
 
+QUICK_DESTINATIONS = [
+    "Darjeeling, India",
+    "Goa, India",
+    "Jaipur, India",
+    "Munnar, Kerala, India",
+    "Rishikesh, India",
+    "Ladakh, India",
+    "Kyoto, Japan",
+    "Bali, Indonesia",
+]
+
+# Fixed, approximate rates — not live. Good enough for a budget instruction
+# to the agents (which still reason in USD, since that's what SerpAPI/
+# Amadeus flight and hotel prices come back in); not a real conversion tool.
+CURRENCY_RATES_PER_USD = {"USD": 1.0, "INR": 83.0}
+BUDGET_DEFAULTS = {  # (default, min, max, step)
+    "USD": (2500, 100, 100_000, 100),
+    "INR": (200_000, 5_000, 8_000_000, 5_000),
+}
+
 
 @st.cache_resource
 def get_runner() -> InMemoryRunner:
@@ -90,8 +110,15 @@ async def run_trip_request(runner, session_id, message, on_stage):
     return stages
 
 
-def build_prompt(destination, origin, start, end, one_way, budget, interests):
-    """Turns the guided-form fields into the natural-language request."""
+def build_prompt(destination, origin, start, end, one_way, budget, currency, interests):
+    """Turns the guided-form fields into the natural-language request.
+
+    The pipeline's tools (SerpAPI/Amadeus flight and hotel prices,
+    aggregate_costs/check_budget) all work in USD, so a non-USD budget is
+    converted to its approximate USD equivalent for the actual constraint —
+    the original currency and amount are included too so the agents can
+    still mention it, but the number they compute against stays USD.
+    """
     parts = []
     if destination:
         parts.append(f"Plan a trip to {destination}")
@@ -102,7 +129,16 @@ def build_prompt(destination, origin, start, end, one_way, budget, interests):
     else:
         days = (end - start).days + 1
         parts.append(f"{days} days, departing {origin} on {start} and returning {end}")
-    parts.append(f"under ${budget:,} total")
+    if currency == "USD":
+        parts.append(f"under ${budget:,} total")
+    else:
+        usd_budget = round(budget / CURRENCY_RATES_PER_USD[currency])
+        parts.append(
+            f"under {currency} {budget:,} total (approximately ${usd_budget:,} USD "
+            f"at ~{CURRENCY_RATES_PER_USD[currency]:.0f} {currency}/USD — treat "
+            f"${usd_budget:,} as the actual budget cap, but also state the total "
+            f"in {currency} in the final plan)"
+        )
     prompt = ", ".join(parts) + "."
     if interests:
         prompt += f" Interests: {', '.join(i.lower() for i in interests)}."
@@ -179,6 +215,13 @@ st.markdown(
 
 for key in ("stages", "error", "request", "elapsed"):
     st.session_state.setdefault(key, None)
+# Widgets below read/write these via `key=` instead of a hardcoded `value=`
+# — passing a literal `value=` on every rerun (e.g. a freshly computed
+# date range) fights the widget's own state and can silently reset
+# whatever the user just picked before they finish interacting with it.
+st.session_state.setdefault("destination_input", "Kyoto, Japan")
+_default_start = date.today() + timedelta(days=45)
+st.session_state.setdefault("travel_dates", (_default_start, _default_start + timedelta(days=4)))
 
 # ---- Sidebar -------------------------------------------------------------
 with st.sidebar:
@@ -207,28 +250,46 @@ request_to_run = None
 guided_tab, free_tab = st.tabs(["🧭 Guided", "✍️ Free text"])
 
 with guided_tab:
+    st.caption("Quick-pick a destination")
+    quick_cols = st.columns(4)
+    for i, quick_dest in enumerate(QUICK_DESTINATIONS):
+        if quick_cols[i % 4].button(quick_dest, key=f"quickdest_{quick_dest}", use_container_width=True):
+            st.session_state["destination_input"] = quick_dest
+            st.session_state["surprise_checkbox"] = False
+
+    # Currency lives outside the form: widgets inside st.form don't rerun
+    # until submit, but the budget field's own range needs to update the
+    # moment currency changes, not a submit later.
+    currency = st.selectbox("Currency", list(CURRENCY_RATES_PER_USD), key="currency_select")
+    budget_default, budget_min, budget_max, budget_step = BUDGET_DEFAULTS[currency]
+
     with st.form("guided_form"):
         left, right = st.columns(2)
         with left:
-            surprise = st.checkbox("Surprise me — pick the destination for me")
+            surprise = st.checkbox("Surprise me — pick the destination for me", key="surprise_checkbox")
             destination = st.text_input(
-                "Destination", value="Kyoto, Japan", placeholder="e.g. Lisbon, Portugal"
+                "Destination", key="destination_input", placeholder="e.g. Lisbon, Portugal"
             )
             origin = st.text_input(
                 "Departing from (airport code)", value="JFK", max_chars=3,
                 help="3-letter IATA code, e.g. JFK, LAX, LHR.",
             )
         with right:
-            default_start = date.today() + timedelta(days=45)
-            dates = st.date_input(
-                "Travel dates",
-                value=(default_start, default_start + timedelta(days=4)),
-                min_value=date.today(),
-            )
+            dates = st.date_input("Travel dates", key="travel_dates", min_value=date.today())
             one_way = st.checkbox("One-way trip (no return date)")
             budget = st.number_input(
-                "Total budget (USD)", min_value=100, max_value=100_000, value=2500, step=100
+                f"Total budget ({currency})",
+                min_value=budget_min,
+                max_value=budget_max,
+                value=budget_default,
+                step=budget_step,
+                key=f"budget_input_{currency}",
             )
+            if currency != "USD":
+                st.caption(
+                    f"≈ ${round(budget / CURRENCY_RATES_PER_USD[currency]):,} USD "
+                    f"at an approximate, non-live rate."
+                )
         interests = st.multiselect("Interests (optional)", INTERESTS)
         guided_submit = st.form_submit_button("Plan my trip", type="primary")
 
@@ -249,6 +310,7 @@ with guided_tab:
                 end,
                 one_way,
                 int(budget),
+                currency,
                 interests,
             )
 
