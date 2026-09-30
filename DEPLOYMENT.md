@@ -1,6 +1,40 @@
-# Deploying to Cloud Run
+# Deploying
 
-## 1. One-time setup (you do this — I can't create a GCP account/billing for you)
+Two options, depending on whether you want to deal with GCP billing:
+
+- **Streamlit Community Cloud** (below) — free, no credit card, deploys
+  straight from this GitHub repo. Simplest path if you just want a demo
+  link.
+- **Cloud Run** (further down) — needs a GCP project with billing enabled
+  (free tier covers a portfolio demo, but billing still has to be turned
+  on), more control (custom timeout, session affinity, Secret Manager),
+  and no sleep-after-inactivity.
+
+## Option A: Streamlit Community Cloud (no billing required)
+
+1. Go to [share.streamlit.io](https://share.streamlit.io) and sign in
+   with GitHub (the same account this repo is pushed to).
+2. Click "New app", pick this repo, branch `main`, main file path
+   `streamlit_app.py`. It auto-detects `requirements.txt`.
+3. Before (or after) deploying, open **Advanced settings → Secrets** and
+   paste your key/value pairs in TOML format. Run this locally yourself
+   so your actual key values never have to be pasted into chat with me:
+   ```bash
+   python deploy/env_to_secrets_toml.py
+   ```
+   Copy its output into the Secrets box.
+4. Deploy. Flat (non-sectioned) TOML secrets are automatically exposed as
+   OS environment variables too, which is exactly what
+   `travel_adviser/config.py` already reads via `os.environ.get(...)` —
+   no code changes needed for this path.
+
+Free tier limits: 1 GB RAM, the app sleeps after 12 hours of no visits
+(wakes back up on the next visit, just a ~30s cold start), one private
+app allowed (public apps are unlimited).
+
+## Option B: Cloud Run (requires GCP billing)
+
+### 1. One-time setup (you do this — I can't create a GCP account/billing for you)
 
 1. Create a project at [console.cloud.google.com](https://console.cloud.google.com)
    (or reuse an existing one) and **enable billing** on it. Cloud Run's free
@@ -18,7 +52,7 @@ You don't need Docker installed locally — `deploy/deploy.sh` uses
 `gcloud run deploy --source`, which builds the container remotely via Cloud
 Build.
 
-## 2. Deploy
+### 2. Deploy
 
 From the repo root, with your `.env` already filled in:
 
@@ -39,7 +73,7 @@ point for a portfolio demo link, but if you'd rather it be private, edit
 `deploy/deploy.sh` and swap that flag for `--no-allow-unauthenticated`;
 you'll then need `gcloud auth print-identity-token` to reach it yourself.
 
-## 3. What's different from local dev
+### 3. What's different from local dev
 
 - Runs on `requirements-deploy.txt` (no `google-adk[eval]`/pytest — those
   are dev-only) instead of `requirements.txt`.
@@ -55,7 +89,7 @@ you'll then need `gcloud auth print-identity-token` to reach it yourself.
   at the cost of a cold start (~10-20s) on the first request after a
   quiet period.
 
-## 4. Redeploying after code changes
+### 4. Redeploying after code changes
 
 Just re-run the same command:
 
@@ -63,7 +97,7 @@ Just re-run the same command:
 ./deploy/deploy.sh <YOUR_PROJECT_ID>
 ```
 
-## 5. Tearing it down
+### 5. Tearing it down
 
 ```bash
 gcloud run services delete travel-adviser --project <YOUR_PROJECT_ID> --region us-central1
