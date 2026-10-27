@@ -40,3 +40,10 @@ def test_error_state_renders_message():
     at.run()
     assert not at.exception
     assert len(at.error) == 1
+
+
+def test_origin_is_searchable_airport_dropdown():
+    at = AppTest.from_file(APP_PATH, default_timeout=30).run()
+    box = next(s for s in at.selectbox if s.key == "origin_airport")
+    assert "(JFK)" in box.value
+    assert len(box.options) > 1000

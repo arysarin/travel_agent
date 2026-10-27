@@ -19,6 +19,7 @@ from google.adk.runners import InMemoryRunner
 from google.genai import types
 
 from travel_adviser.agent import root_agent
+from travel_adviser.airports import airport_labels, code_from_label, default_label
 from travel_adviser.config import (
     GEMINI_FALLBACK_MODEL,
     GROQ_API_KEY,
@@ -270,9 +271,12 @@ with guided_tab:
             destination = st.text_input(
                 "Destination", key="destination_input", placeholder="e.g. Lisbon, Portugal"
             )
-            origin = st.text_input(
-                "Departing from (airport code)", value="JFK", max_chars=3,
-                help="3-letter IATA code, e.g. JFK, LAX, LHR.",
+            origin_label = st.selectbox(
+                "Departing from",
+                airport_labels(),
+                index=airport_labels().index(default_label()),
+                key="origin_airport",
+                help="Click and type a city or airport name (e.g. Delhi, Mumbai, London).",
             )
         with right:
             dates = st.date_input("Travel dates", key="travel_dates", min_value=date.today())
@@ -298,14 +302,12 @@ with guided_tab:
         end = dates[1] if isinstance(dates, (tuple, list)) and len(dates) > 1 else None
         if not surprise and not destination.strip():
             st.warning("Enter a destination, or tick “Surprise me”.")
-        elif len(origin.strip()) != 3:
-            st.warning("Enter a 3-letter departure airport code, e.g. JFK.")
         elif not one_way and end is None:
             st.warning("Pick both a start and an end date (or tick one-way).")
         else:
             request_to_run = build_prompt(
                 None if surprise else destination.strip(),
-                origin.strip().upper(),
+                code_from_label(origin_label),
                 start,
                 end,
                 one_way,
