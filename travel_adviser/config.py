@@ -29,7 +29,7 @@ GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 # but the free lineup rotates over time; if OPENROUTER_MODEL ever 404s,
 # check https://openrouter.ai/models?max_price=0 for the current list.
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
-OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "qwen/qwen3.8-27b:free")
+OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "nvidia/nemotron-3-ultra-550b-a55b:free")
 
 # Amadeus is a self-serve backup to SerpAPI for flight search specifically
 # (SerpAPI's free tier is only 100 searches/month). Both keys are required
