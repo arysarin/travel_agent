@@ -20,6 +20,8 @@ from google.genai import types
 
 from travel_adviser.agent import root_agent
 from travel_adviser.airports import airport_labels, code_from_label, default_label
+from travel_adviser.emailer import EmailError, email_configured, is_valid_address, send_plan_email
+from travel_adviser.tools.weather_window import format_suggestions_markdown, suggest_better_dates
 from travel_adviser.config import (
     GEMINI_FALLBACK_MODEL,
     GROQ_API_KEY,
@@ -146,6 +148,69 @@ def build_prompt(destination, origin, start, end, one_way, budget, currency, int
     return prompt
 
 
+MAX_EMAILS_PER_SESSION = 5
+EMAIL_HELP = (
+    "Optional. The finished plan is emailed here once it's ready."
+    if email_configured()
+    else "Email isn't set up on this server (SMTP_USER / SMTP_PASSWORD missing)."
+)
+
+
+@st.cache_data(ttl=6 * 3600, show_spinner=False)
+def cached_weather_check(destination: str, start_iso: str, end_iso: str) -> dict:
+    return suggest_better_dates(destination, start_iso, end_iso)
+
+
+def plan_markdown(final_text: str) -> str:
+    """The final plan plus, when the chosen dates have poor weather, better-date suggestions."""
+    extra = format_suggestions_markdown(st.session_state.get("weather_check"))
+    return f"{final_text}\n\n{extra}" if extra else final_text
+
+
+def email_plan(to: str, final_text: str) -> tuple[bool, str]:
+    """Sends the plan; returns (ok, message) for display. Caps sends per browser session."""
+    if st.session_state.email_count >= MAX_EMAILS_PER_SESSION:
+        return False, f"You've reached the limit of {MAX_EMAILS_PER_SESSION} emails for this session."
+    trip = st.session_state.get("trip") or {}
+    subject = f"Your trip plan: {trip['destination']}" if trip.get("destination") else "Your trip plan"
+    try:
+        send_plan_email(to, subject, plan_markdown(final_text))
+    except EmailError as exc:
+        return False, str(exc)
+    st.session_state.email_count += 1
+    return True, f"Plan emailed to {to.strip()}."
+
+
+def render_weather_check(check: dict | None) -> None:
+    if not check:
+        return
+    if "error" in check:
+        st.caption(f"Seasonal weather check unavailable: {check['error']}")
+        return
+    q = check["requested"]
+    if check["weather_is_good"]:
+        st.success(
+            f"☀️ Weather looks good for your dates: typically {q['avg_temp_c']}°C with "
+            f"about {q['expected_rainy_days']} rainy days."
+        )
+    else:
+        st.warning(
+            f"🌧️ Weather for {q['start']} to {q['end']} is typically **{q['rating']}** "
+            f"({q['avg_temp_c']}°C, about {q['expected_rainy_days']} rainy days)."
+        )
+        if check["suggested_windows"]:
+            st.markdown("**Better dates to consider:**")
+            for w in check["suggested_windows"]:
+                st.markdown(
+                    f"- **{w['start']} → {w['end']}** — {w['rating']}, "
+                    f"~{w['expected_rainy_days']} rainy days, {w['avg_temp_c']}°C"
+                )
+            st.caption("Flight and hotel prices aren't re-checked for these dates.")
+        else:
+            st.caption("No clearly better window was found near your dates.")
+    st.caption(f"Based on the {check['basis']}.")
+
+
 def fallback_chain() -> list[str]:
     chain = [MODEL_NAME]
     if GEMINI_FALLBACK_MODEL:
@@ -157,12 +222,26 @@ def fallback_chain() -> list[str]:
     return chain
 
 
-def execute(request_text: str) -> None:
-    """Runs a request with live per-stage progress; stores results in session state."""
+def execute(request_text: str, trip: dict | None = None, email_to: str = "") -> None:
+    """Runs a request with live per-stage progress; stores results in session state.
+
+    `trip` (guided form only) is {destination, start, end}; when it names a
+    destination, typical weather for those dates is checked up front, outside
+    the LLM pipeline, so the better-dates advice shows even if a model run fails.
+    """
     st.session_state.error = None
     st.session_state.stages = None
     st.session_state.request = request_text
+    st.session_state.trip = trip
+    st.session_state.weather_check = None
+    st.session_state.email_status = None
     session_id = f"session-{uuid.uuid4()}"
+
+    if trip and trip.get("destination"):
+        with st.spinner("Checking typical weather for your dates…"):
+            st.session_state.weather_check = cached_weather_check(
+                trip["destination"], trip["start"].isoformat(), trip["end"].isoformat() if trip.get("end") else ""
+            )
 
     started = time.time()
     done: set[str] = set()
@@ -187,6 +266,11 @@ def execute(request_text: str) -> None:
         )
         st.session_state.elapsed = time.time() - started
         status.update(label="Trip plan ready", state="complete", expanded=False)
+        final = st.session_state.stages.get("final_merge_agent")
+        if email_to and final:
+            st.session_state.email_status = email_plan(email_to, final[-1])
+        elif email_to:
+            st.session_state.email_status = (False, "The run didn't finish the full plan, so nothing was emailed.")
     except Exception as exc:  # noqa: BLE001 - surface any provider/config error to the UI
         # str(exc) can be empty for some exception types (e.g. a bare
         # asyncio.CancelledError/TimeoutError), and an empty string reads
@@ -214,8 +298,10 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-for key in ("stages", "error", "request", "elapsed"):
+RESULT_KEYS = ("stages", "error", "request", "elapsed", "trip", "weather_check", "email_status")
+for key in RESULT_KEYS:
     st.session_state.setdefault(key, None)
+st.session_state.setdefault("email_count", 0)
 # Widgets below read/write these via `key=` instead of a hardcoded `value=`
 # — passing a literal `value=` on every rerun (e.g. a freshly computed
 # date range) fights the widget's own state and can silently reset
@@ -238,7 +324,7 @@ with st.sidebar:
     st.markdown("\n".join(f"{i}. {label}" for i, label in enumerate(STAGE_LABELS.values(), 1)))
     if st.session_state.stages or st.session_state.error:
         if st.button("↺ Start over", use_container_width=True):
-            for key in ("stages", "error", "request", "elapsed"):
+            for key in RESULT_KEYS:
                 st.session_state[key] = None
             st.rerun()
 
@@ -248,6 +334,8 @@ st.caption("Tell it where, when, and how much — get an itinerary, flights, a h
 
 # ---- Input ---------------------------------------------------------------
 request_to_run = None
+trip = None
+email_to = ""
 guided_tab, free_tab = st.tabs(["🧭 Guided", "✍️ Free text"])
 
 with guided_tab:
@@ -295,6 +383,10 @@ with guided_tab:
                     f"at an approximate, non-live rate."
                 )
         interests = st.multiselect("Interests (optional)", INTERESTS)
+        guided_email = st.text_input(
+            "Email me the plan", key="guided_email", placeholder="you@example.com",
+            help=EMAIL_HELP, disabled=not email_configured(),
+        )
         guided_submit = st.form_submit_button("Plan my trip", type="primary")
 
     if guided_submit:
@@ -304,7 +396,11 @@ with guided_tab:
             st.warning("Enter a destination, or tick “Surprise me”.")
         elif not one_way and end is None:
             st.warning("Pick both a start and an end date (or tick one-way).")
+        elif guided_email.strip() and not is_valid_address(guided_email.strip()):
+            st.warning("That email address doesn't look valid.")
         else:
+            email_to = guided_email.strip()
+            trip = {"destination": None if surprise else destination.strip(), "start": start, "end": None if one_way else end}
             request_to_run = build_prompt(
                 None if surprise else destination.strip(),
                 code_from_label(origin_label),
@@ -321,12 +417,22 @@ with free_tab:
         free_text = st.text_area(
             "Describe the trip you want planned", value=EXAMPLE_REQUEST, height=110
         )
+        free_email = st.text_input(
+            "Email me the plan", key="free_email", placeholder="you@example.com",
+            help=EMAIL_HELP, disabled=not email_configured(),
+        )
         free_submit = st.form_submit_button("Plan my trip", type="primary")
     if free_submit and free_text.strip():
-        request_to_run = free_text.strip()
+        if free_email.strip() and not is_valid_address(free_email.strip()):
+            st.warning("That email address doesn't look valid.")
+        else:
+            email_to = free_email.strip()
+            request_to_run = free_text.strip()
 
 if request_to_run:
-    execute(request_to_run)
+    if email_to:
+        st.session_state["resend_email"] = email_to
+    execute(request_to_run, trip=trip, email_to=email_to)
 
 # ---- Results -------------------------------------------------------------
 if st.session_state.error:
@@ -338,6 +444,8 @@ if st.session_state.error:
     )
     with st.expander("Error details"):
         st.code(st.session_state.error, language=None)
+
+render_weather_check(st.session_state.weather_check)
 
 stages = st.session_state.stages
 if stages:
@@ -373,7 +481,22 @@ if stages:
     if final:
         st.download_button(
             "⬇ Download plan (.md)",
-            data=final[-1],
+            data=plan_markdown(final[-1]),
             file_name="trip_plan.md",
             mime="text/markdown",
         )
+        st.subheader("📧 Email this plan")
+        sent = st.session_state.email_status
+        if sent:
+            (st.success if sent[0] else st.error)(sent[1])
+        if email_configured():
+            send_to = st.text_input("Send to", key="resend_email", placeholder="you@example.com")
+            if st.button("Send email"):
+                if not is_valid_address(send_to.strip()):
+                    st.session_state.email_status = (False, "That email address doesn't look valid.")
+                else:
+                    with st.spinner("Sending…"):
+                        st.session_state.email_status = email_plan(send_to.strip(), final[-1])
+                st.rerun()
+        else:
+            st.caption("Email isn't set up on this server, so plans can only be downloaded.")

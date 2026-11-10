@@ -38,6 +38,8 @@ SECRET_VARS=(
   OPENROUTER_API_KEY
   AMADEUS_API_KEY
   AMADEUS_API_SECRET
+  SMTP_USER
+  SMTP_PASSWORD
 )
 
 get_env_value() {
@@ -74,7 +76,8 @@ SECRETS_FLAG=$(IFS=,; echo "${SECRET_ARGS[*]}")
 # not a durable log store.
 ENV_ARGS="TRAVEL_ADVISER_LOG_PATH=/tmp/travel_adviser.jsonl"
 for var in TRAVEL_ADVISER_MODEL GEMINI_FALLBACK_MODEL GROQ_MODEL OPENROUTER_MODEL \
-           MAX_LLM_CALLS MAX_BUDGET_ROUNDS API_TIMEOUT_SECONDS; do
+           MAX_LLM_CALLS MAX_BUDGET_ROUNDS API_TIMEOUT_SECONDS \
+           SMTP_HOST SMTP_PORT SMTP_FROM EMAIL_DAILY_LIMIT; do
   value="$(get_env_value "$var")"
   [[ -n "$value" ]] && ENV_ARGS="$ENV_ARGS,$var=$value"
 done

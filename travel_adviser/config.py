@@ -37,6 +37,17 @@ OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "nvidia/nemotron-3-ultra-5
 AMADEUS_API_KEY = os.environ.get("AMADEUS_API_KEY", "")
 AMADEUS_API_SECRET = os.environ.get("AMADEUS_API_SECRET", "")
 
+# Emailing the finished plan. Any SMTP provider works; the defaults suit Gmail
+# with an App Password (Google account -> Security -> 2-Step Verification ->
+# App passwords). Leave SMTP_USER/SMTP_PASSWORD blank to disable emailing.
+SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USER = os.environ.get("SMTP_USER", "")
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
+SMTP_FROM = os.environ.get("SMTP_FROM", "") or SMTP_USER
+# Public deployments can be used to send mail from your account, so cap it.
+EMAIL_DAILY_LIMIT = int(os.environ.get("EMAIL_DAILY_LIMIT", "50"))
+
 MAX_LLM_CALLS = int(os.environ.get("MAX_LLM_CALLS", "20"))
 MAX_BUDGET_ROUNDS = int(os.environ.get("MAX_BUDGET_ROUNDS", "3"))
 API_TIMEOUT_SECONDS = float(os.environ.get("API_TIMEOUT_SECONDS", "10"))

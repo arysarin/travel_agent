@@ -16,7 +16,7 @@ Travel Adviser (Coordinator — SequentialAgent pipeline)
      │        ├──> Transportation Agent  ───> SerpAPI Google Flights, Amadeus backup
      │        ├──> Accommodation Agent   ───> SerpAPI Google Hotels
      │        └──> Budget Optimization Agent       (deterministic cost math + LLM cut suggestions)
-     ├──> Weather & Risk Assessment Agent ───> OpenWeatherMap
+     ├──> Weather & Risk Assessment Agent ───> OpenWeatherMap + Open-Meteo seasonal check
      └──> Final Merge Agent                       (combines everything into one response)
 ```
 
@@ -45,6 +45,7 @@ Then fill in `.env` with your own keys:
 - `GROQ_API_KEY` (optional) — [Groq Console](https://console.groq.com/keys)
 - `OPENROUTER_API_KEY` (optional) — [OpenRouter](https://openrouter.ai/keys)
 - `AMADEUS_API_KEY` / `AMADEUS_API_SECRET` (optional, both together) — [Amadeus for Developers](https://developers.amadeus.com)
+- `SMTP_USER` / `SMTP_PASSWORD` (optional, both together) — enables emailing plans; see below
 
 Every tool function degrades gracefully with a structured `{"error": ...}`
 response (rather than crashing) if a key is missing or the call times out,
@@ -109,6 +110,37 @@ environment whenever SerpAPI is unavailable. Amadeus requires exact
 3-letter IATA airport codes (SerpAPI tolerates looser input like city
 names) — `transportation_agent`'s instructions already tell it to always
 use IATA codes for this reason.
+
+### Better-dates weather check
+
+OpenWeatherMap's free forecast only reaches 5 days out, so for a trip months
+away `travel_adviser/tools/weather_window.py` uses
+[Open-Meteo](https://open-meteo.com) (free, no key) instead: it looks up the
+destination, pulls the last five years of daily weather for the same
+calendar days, and scores the trip window on rainy days and temperature.
+If the chosen dates score poorly it suggests up to three better windows of
+the same length within about four months either side. These are seasonal
+averages, not a forecast, and flight/hotel prices aren't re-checked for the
+suggested dates. The guided form runs this check itself before the LLM
+pipeline starts (so it still shows if a model run fails); the weather agent
+also has the tool, so free-text requests get it in the written plan.
+Destinations are matched by exact name (a wrong city is worse than none), and
+a few regions the geocoder lacks (Goa, Ladakh, Kerala, Sikkim, Kashmir) map
+to a representative town.
+
+### Emailing the plan
+
+Set `SMTP_USER` and `SMTP_PASSWORD` to enable the "Email me the plan" field
+and the "Email this plan" button. Defaults suit Gmail
+(`smtp.gmail.com:587`): turn on 2-Step Verification, then create an
+[App Password](https://myaccount.google.com/apppasswords) and use that as
+`SMTP_PASSWORD` (not your normal password). Other providers: set `SMTP_HOST`,
+`SMTP_PORT` (465 uses SSL, anything else STARTTLS) and optionally
+`SMTP_FROM`. The email carries the plan as HTML plus a `.md` attachment.
+A public deployment could be used to send mail from your account, so sends
+are capped per browser session (5) and per server per day
+(`EMAIL_DAILY_LIMIT`, default 50). Leave the SMTP vars blank to disable
+emailing; the field is then greyed out.
 
 ## Running
 
